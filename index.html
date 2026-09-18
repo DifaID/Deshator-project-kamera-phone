@@ -98,7 +98,7 @@
             object-fit: contain;
         }
 
-        /* Flash Effect Animation */
+        /* Flash Screen Anim */
         .shutter-flash {
             position: absolute;
             top: 0;
@@ -120,7 +120,7 @@
             100% { opacity: 0; }
         }
 
-        /* Ratio Selector Drawer */
+        /* Ratio Drawer */
         .ratio-drawer {
             position: absolute;
             top: 65px;
@@ -159,7 +159,6 @@
             color: #fff;
         }
 
-        /* Live Indicator */
         .live-tag {
             position: absolute;
             top: 70px;
@@ -194,7 +193,7 @@
             z-index: 10;
         }
 
-        /* Zoom Switcher (0.5x, 1x, 2x) */
+        /* Zoom Buttons */
         .zoom-container {
             display: flex;
             gap: 15px;
@@ -275,7 +274,7 @@
             transform: scale(0.85);
         }
 
-        /* Gallery Modal */
+        /* Modal Gallery */
         .gallery-modal {
             position: absolute;
             top: 0;
@@ -309,14 +308,10 @@
             position: relative;
         }
 
-        .gallery-content img, .gallery-content video {
+        .gallery-content img {
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
-        }
-
-        .hidden-video {
-            display: none;
         }
     </style>
 </head>
@@ -327,22 +322,22 @@
     <div class="top-bar">
         <button class="icon-btn" id="flashToggle">⚡</button>
         <button class="icon-btn" id="liveToggle">LIVE</button>
-        <button class="icon-btn ratio-btn" id="ratioToggle">4:3</button>
+        <button class="icon-btn ratio-btn" id="ratioToggle">3:4</button>
         <button class="icon-btn" id="timerToggle">⏱️</button>
     </div>
 
     <!-- Ratio Selection Drawer -->
     <div class="ratio-drawer" id="ratioDrawer">
         <button class="ratio-option" data-ratio="1:1">1:1</button>
-        <button class="ratio-option" data-ratio="3:4">3:4</button>
-        <button class="ratio-option active" data-ratio="4:3">4:3</button>
+        <button class="ratio-option active" data-ratio="3:4">3:4</button>
+        <button class="ratio-option" data-ratio="4:3">4:3</button>
         <button class="ratio-option" data-ratio="2:3">2:3</button>
         <button class="ratio-option" data-ratio="3:2">3:2</button>
         <button class="ratio-option" data-ratio="9:16">9:16</button>
         <button class="ratio-option" data-ratio="16:9">16:9</button>
     </div>
 
-    <!-- Live Photo Badge Indicator -->
+    <!-- Live Badge -->
     <div class="live-tag" id="liveTag">LIVE</div>
 
     <!-- Viewfinder Area -->
@@ -351,16 +346,16 @@
         <div class="shutter-flash" id="shutterFlash"></div>
     </div>
 
-    <!-- Bottom Control Bar -->
+    <!-- Bottom Controls -->
     <div class="bottom-bar">
-        <!-- Ultrawide / Zoom Buttons -->
+        <!-- Zoom Options -->
         <div class="zoom-container">
             <button class="zoom-btn" data-zoom="0.5">0.5</button>
             <button class="zoom-btn active" data-zoom="1">1x</button>
             <button class="zoom-btn" data-zoom="2">2x</button>
         </div>
 
-        <!-- Main Shutter Controls -->
+        <!-- Shutter Buttons -->
         <div class="shutter-bar">
             <div class="gallery-preview" id="galleryPreview">
                 <img id="thumbImg" src="" alt="" style="display:none;">
@@ -374,31 +369,28 @@
         </div>
     </div>
 
-    <!-- Gallery / Preview Modal -->
+    <!-- Preview Modal -->
     <div class="gallery-modal" id="galleryModal">
         <div class="gallery-header">
             <button class="icon-btn" id="closeGallery">✕</button>
             <span style="font-size: 14px; font-weight: 600;">Media Preview</span>
             <div style="width: 40px;"></div>
         </div>
-        <div class="gallery-content" id="galleryContent">
+        <div class="gallery-content">
             <img id="galleryImg" src="" alt="">
-            <video id="galleryVideo" class="hidden-video" loop playsinline></video>
         </div>
     </div>
 </div>
 
-<!-- Hidden Video Element for Stream Processing -->
 <video id="webcamVideo" autoplay playsinline style="display:none;"></video>
 
 <script>
     const config = {
-        facingMode: 'user',
+        facingMode: 'user', // Kamera selfie default
         zoom: 1,
-        ratio: '4:3',
+        ratio: '3:4', // Default rasio 3:4 foto formal
         isLive: false,
         isFlash: false,
-        timer: 0,
         lastCapturedMedia: null
     };
 
@@ -407,10 +399,9 @@
     const ctx = canvas.getContext('2d');
     
     let currentStream = null;
-    let mediaRecorder = null;
-    let recordedChunks = [];
+    let trackTorch = null;
 
-    // Initialize Camera Stream
+    // Start Camera Stream
     async function startCamera() {
         if (currentStream) {
             currentStream.getTracks().forEach(track => track.stop());
@@ -428,13 +419,69 @@
             
             currentStream = await navigator.mediaDevices.getUserMedia(constraints);
             videoEl.srcObject = currentStream;
-            videoEl.play();
+            await videoEl.play();
+
+            // Hardware Torch (Flash Senter Kamera Belakang)
+            const videoTrack = currentStream.getVideoTracks()[0];
+            const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+            if (capabilities.torch) {
+                trackTorch = videoTrack;
+            } else {
+                trackTorch = null;
+            }
+            updateTorchState();
         } catch (err) {
-            console.warn("Kamera tidak dapat diakses atau diblokir:", err);
+            console.warn("Akses kamera terhalang:", err);
         }
     }
 
-    // Render Loop for Viewfinder with Aspect Ratio & Ultra Wide (0.5x) Fisheye Effect
+    // Toggle Senter Flash HP Real
+    async function updateTorchState() {
+        if (trackTorch) {
+            try {
+                await trackTorch.applyConstraints({
+                    advanced: [{ torch: config.isFlash && config.facingMode === 'environment' }]
+                });
+            } catch (e) {
+                console.log("Torch error:", e);
+            }
+        }
+    }
+
+    // Custom Canvas Fisheye Distortion for True Ultrawide (0.5x)
+    function drawUltrawideDistortion(source, sx, sy, sw, sh, dw, dh) {
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = dw;
+        offCanvas.height = dh;
+        const offCtx = offCanvas.getContext('2d');
+
+        offCtx.drawImage(source, sx, sy, sw, sh, 0, 0, dw, dh);
+        
+        ctx.save();
+        const centerX = dw / 2;
+        const centerY = dh / 2;
+        const radius = Math.sqrt(centerX * centerX + centerY * centerY);
+
+        // Fisheye Zoom Out Effect: Tengah menjauh, pinggir tetap presisi
+        for (let y = 0; y < dh; y += 4) {
+            for (let x = 0; x < dw; x += 4) {
+                const dx = x - centerX;
+                const dy = y - centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const normDist = distance / radius;
+                
+                // Formula Distorsi Barrel untuk Zoom Out Tengah
+                const distortion = 1 - 0.25 * Math.pow(normDist, 2);
+                const sourceX = centerX + dx * distortion;
+                const sourceY = centerY + dy * distortion;
+
+                ctx.drawImage(offCanvas, sourceX, sourceY, 4, 4, x, y, 4, 4);
+            }
+        }
+        ctx.restore();
+    }
+
+    // Render Viewfinder Frame
     function renderViewfinder() {
         if (videoEl.readyState === videoEl.HAVE_ENOUGH_DATA) {
             const [rw, rh] = config.ratio.split(':').map(Number);
@@ -455,17 +502,19 @@
             const sy = (videoEl.videoHeight - renderHeight) / 2;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
 
-            // Ultrawide (0.5x) Fisheye Distortion Effect Simulation
+            // TIDAK MIRROR untuk Kamera Selfie Depan
+            if (config.facingMode === 'user') {
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+            }
+
             if (config.zoom === 0.5) {
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) / 1.1, 0, Math.PI * 2);
-                ctx.clip();
-                ctx.drawImage(videoEl, sx, sy, renderWidth, renderHeight, 0, 0, canvas.width, canvas.height);
-                ctx.restore();
+                // Efek Kamera Ultrawide (0.5x Zoom Out Tengah)
+                drawUltrawideDistortion(videoEl, sx, sy, renderWidth, renderHeight, canvas.width, canvas.height);
             } else {
-                // 1x and 2x Zoom
+                // Kamera Normal 1x & Zoom 2x
                 const zoomFactor = config.zoom;
                 const zw = renderWidth / zoomFactor;
                 const zh = renderHeight / zoomFactor;
@@ -474,30 +523,30 @@
 
                 ctx.drawImage(videoEl, zx, zy, zw, zh, 0, 0, canvas.width, canvas.height);
             }
+
+            ctx.restore();
         }
         requestAnimationFrame(renderViewfinder);
     }
 
-    // Capture Action
-    document.getElementById('shutterBtn').addEventListener('click', () => {
-        // Flash animation
+    // Shutter / Capture Photo
+    document.getElementById('shutterBtn').addEventListener('click', async () => {
+        // Efek Layar Flash
         if (config.isFlash) {
             const flash = document.getElementById('shutterFlash');
             flash.classList.add('animate');
             setTimeout(() => flash.classList.remove('animate'), 300);
         }
 
-        // Capture canvas image
         const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
         config.lastCapturedMedia = { type: 'image', url: dataUrl };
 
-        // Update preview thumbnail
         const thumb = document.getElementById('thumbImg');
         thumb.src = dataUrl;
         thumb.style.display = 'block';
     });
 
-    // Ratio Toggle UI Handler
+    // Ratio Toggle
     const ratioToggleBtn = document.getElementById('ratioToggle');
     const ratioDrawer = document.getElementById('ratioDrawer');
 
@@ -516,7 +565,7 @@
         });
     });
 
-    // Zoom Toggle Handler
+    // Zoom Buttons
     document.querySelectorAll('.zoom-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.zoom-btn').forEach(b => b.classList.remove('active'));
@@ -525,7 +574,7 @@
         });
     });
 
-    // Switch Front/Rear Camera
+    // Switch Kamera (Depan / Belakang)
     document.getElementById('switchCamera').addEventListener('click', () => {
         config.facingMode = (config.facingMode === 'user') ? 'environment' : 'user';
         startCamera();
@@ -534,21 +583,21 @@
     // Live Photo Toggle
     const liveToggleBtn = document.getElementById('liveToggle');
     const liveTag = document.getElementById('liveTag');
-
     liveToggleBtn.addEventListener('click', () => {
         config.isLive = !config.isLive;
         liveToggleBtn.classList.toggle('active', config.isLive);
         liveTag.classList.toggle('show', config.isLive);
     });
 
-    // Flash Toggle
+    // Flash Button Toggle
     const flashToggleBtn = document.getElementById('flashToggle');
     flashToggleBtn.addEventListener('click', () => {
         config.isFlash = !config.isFlash;
         flashToggleBtn.classList.toggle('active', config.isFlash);
+        updateTorchState();
     });
 
-    // Open Gallery Preview Modal
+    // Gallery Modal Preview
     document.getElementById('galleryPreview').addEventListener('click', () => {
         if (!config.lastCapturedMedia) return;
         const modal = document.getElementById('galleryModal');
@@ -561,7 +610,7 @@
         document.getElementById('galleryModal').classList.remove('show');
     });
 
-    // Initialize Camera and Viewfinder Loop
+    // Start App
     startCamera();
     requestAnimationFrame(renderViewfinder);
 </script>
