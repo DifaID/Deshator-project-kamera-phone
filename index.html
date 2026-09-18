@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Kamera iOS Web Pro</title>
+    <title>Kamera iOS Web Pro Ultra</title>
     <style>
         * {
             box-sizing: border-box;
@@ -37,7 +37,7 @@
             overflow: hidden;
         }
 
-        /* Top Bar Navigation */
+        /* Top Navigation Bar */
         .top-bar {
             position: absolute;
             top: 0;
@@ -49,7 +49,7 @@
             align-items: center;
             z-index: 10;
             background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
-            padding: 0 10px;
+            padding: 0 8px;
         }
 
         .icon-btn {
@@ -62,7 +62,8 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 14px;
+            font-size: 13px;
+            font-weight: 600;
             cursor: pointer;
             backdrop-filter: blur(10px);
             transition: all 0.2s ease;
@@ -73,12 +74,12 @@
             color: #000;
         }
 
-        .ratio-btn {
+        .pill-btn {
             width: auto;
-            padding: 0 12px;
+            padding: 0 10px;
             border-radius: 20px;
-            font-weight: 600;
-            font-size: 13px;
+            font-weight: 700;
+            font-size: 12px;
         }
 
         /* Record Timer Indicator */
@@ -89,7 +90,7 @@
             transform: translateX(-50%);
             background: rgba(255, 59, 48, 0.9);
             color: #fff;
-            padding: 4px 12px;
+            padding: 4px 14px;
             border-radius: 12px;
             font-size: 12px;
             font-weight: 700;
@@ -105,7 +106,7 @@
 
         @keyframes pulse {
             0% { opacity: 1; }
-            100% { opacity: 0.6; }
+            100% { opacity: 0.5; }
         }
 
         /* Viewfinder Area */
@@ -166,17 +167,17 @@
             100% { opacity: 0; }
         }
 
-        /* Ratio Drawer Options */
-        .ratio-drawer {
+        /* Drawers (Ratio & Resolution) */
+        .drawer-menu {
             position: absolute;
             top: 65px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(20, 20, 20, 0.85);
+            background: rgba(20, 20, 20, 0.9);
             backdrop-filter: blur(15px);
             border-radius: 25px;
             display: flex;
-            gap: 8px;
+            gap: 6px;
             padding: 6px 12px;
             z-index: 15;
             opacity: 0;
@@ -184,12 +185,12 @@
             transition: opacity 0.2s ease;
         }
 
-        .ratio-drawer.show {
+        .drawer-menu.show {
             opacity: 1;
             pointer-events: auto;
         }
 
-        .ratio-option {
+        .drawer-option {
             background: transparent;
             border: none;
             color: #ccc;
@@ -200,7 +201,7 @@
             cursor: pointer;
         }
 
-        .ratio-option.active {
+        .drawer-option.active {
             background: rgba(255, 255, 255, 0.3);
             color: #fff;
         }
@@ -425,22 +426,29 @@
     <div class="top-bar">
         <button class="icon-btn" id="flashToggle">⚡</button>
         <button class="icon-btn" id="liveToggle">LIVE</button>
-        <button class="icon-btn ratio-btn" id="ratioToggle">3:4</button>
-        <button class="icon-btn" id="stabToggle" title="Stabilizer">🌐</button>
+        <button class="icon-btn pill-btn" id="hdrToggle">HDR</button>
+        <button class="icon-btn pill-btn" id="ratioToggle">3:4</button>
+        <button class="icon-btn pill-btn" id="resToggle" style="display:none;">1080p</button>
+        <button class="icon-btn active" id="stabToggle" title="Stabilizer">🌐</button>
     </div>
 
     <!-- Recording Timer Badge -->
     <div class="rec-timer" id="recTimer">00:00</div>
 
     <!-- Ratio Options Drawer -->
-    <div class="ratio-drawer" id="ratioDrawer">
-        <button class="ratio-option" data-ratio="1:1">1:1</button>
-        <button class="ratio-option active" data-ratio="3:4">3:4</button>
-        <button class="ratio-option" data-ratio="4:3">4:3</button>
-        <button class="ratio-option" data-ratio="2:3">2:3</button>
-        <button class="ratio-option" data-ratio="3:2">3:2</button>
-        <button class="ratio-option" data-ratio="9:16">9:16</button>
-        <button class="ratio-option" data-ratio="16:9">16:9</button>
+    <div class="drawer-menu" id="ratioDrawer">
+        <button class="drawer-option" data-ratio="1:1">1:1</button>
+        <button class="drawer-option active" data-ratio="3:4">3:4</button>
+        <button class="drawer-option" data-ratio="4:3">4:3</button>
+        <button class="drawer-option" data-ratio="9:16">9:16</button>
+        <button class="drawer-option" data-ratio="16:9">16:9</button>
+    </div>
+
+    <!-- Resolution Options Drawer -->
+    <div class="drawer-menu" id="resDrawer">
+        <button class="drawer-option" data-res="720">720p HD</button>
+        <button class="drawer-option active" data-res="1080">1080p FHD</button>
+        <button class="drawer-option" data-res="2160">4K Ultra HD</button>
     </div>
 
     <!-- Live Photo Active Tag -->
@@ -509,7 +517,9 @@
         facingMode: 'user',
         zoom: 1,
         ratio: '3:4',
-        mode: 'photo', // 'photo' atau 'video'
+        mode: 'photo', // 'photo' / 'video'
+        videoRes: '1080', // '720', '1080', '2160'
+        isHDR: false,
         isLive: false,
         isFlash: false,
         isStab: true,
@@ -533,10 +543,10 @@
     let currentMediaList = [];
     let activeMediaIndex = 0;
 
-    // --- IndexedDB: Media Storage ---
+    // --- IndexedDB Storage ---
     function initDatabase() {
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open('iOSCameraDB_v2', 1);
+            const request = indexedDB.open('iOSCameraDB_v3', 1);
             request.onupgradeneeded = (e) => {
                 const db = e.target.result;
                 if (!db.objectStoreNames.contains('media')) {
@@ -590,20 +600,24 @@
         };
     }
 
-    // --- Start Camera Stream ---
-    async function startCamera() {
+    // --- Smart Camera Stream (Tanpa Kebocoran Mikrofon) ---
+    async function startCamera(withAudio = false) {
         if (currentStream) {
             currentStream.getTracks().forEach(track => track.stop());
         }
+
+        let resHeight = 1080;
+        if (config.videoRes === '720') resHeight = 720;
+        if (config.videoRes === '2160') resHeight = 2160;
 
         try {
             const constraints = {
                 video: {
                     facingMode: config.facingMode,
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
+                    width: { ideal: Math.round(resHeight * (16/9)) },
+                    height: { ideal: resHeight }
                 },
-                audio: true // Mengaktifkan Audio untuk rekaman Video
+                audio: withAudio // Audio HANYA aktif saat rekam video
             };
 
             currentStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -617,14 +631,9 @@
 
             startLivePhotoBuffer();
         } catch (err) {
-            console.warn("Akses kamera/mikrofon dibatasi:", err);
-            // Fallback video saja jika mic ditolak
-            try {
-                currentStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: config.facingMode } });
-                videoEl.srcObject = currentStream;
-                await videoEl.play();
-            } catch (e) {
-                console.error("Gagal memuat kamera:", e);
+            console.warn("Akses kamera tanpa audio:", err);
+            if (withAudio) {
+                startCamera(false); // Fallback tanpa audio jika audio ditolak
             }
         }
     }
@@ -640,49 +649,49 @@
             liveRecorder.ondataavailable = (e) => {
                 if (e.data.size > 0) {
                     liveChunks.push(e.data);
-                    if (liveChunks.length > 8) liveChunks.shift(); // Klip ~2-3 detik
+                    if (liveChunks.length > 8) liveChunks.shift();
                 }
             };
             liveRecorder.start(300);
-        } catch (e) {
-            console.log("Live buffer ready");
-        }
+        } catch (e) {}
     }
 
-    // --- Real-time Video Motion Stabilizer ---
+    // --- Hardware Real-Time Video Motion Stabilizer ---
     let targetX = 0, targetY = 0;
     let currentX = 0, currentY = 0;
 
-    if (window.DeviceOrientationEvent) {
-        window.addEventListener('deviceorientation', (e) => {
+    if (window.DeviceMotionEvent) {
+        window.addEventListener('devicemotion', (e) => {
             if (!config.isStab) return;
-            targetX = (e.gamma || 0) * 0.2;
-            targetY = (e.beta || 0) * 0.2;
+            const gx = e.rotationRate ? e.rotationRate.beta : 0;
+            const gy = e.rotationRate ? e.rotationRate.alpha : 0;
+            targetX = Math.max(-15, Math.min(15, gx * 0.3));
+            targetY = Math.max(-15, Math.min(15, gy * 0.3));
         });
     }
 
     function applyStabilizer() {
         if (config.isStab) {
-            currentX += (targetX - currentX) * 0.1;
-            currentY += (targetY - currentY) * 0.1;
-            stabWrapper.style.transform = `translate3d(${-currentX}px, ${-currentY}px, 0) scale(1.04)`;
+            currentX += (targetX - currentX) * 0.15;
+            currentY += (targetY - currentY) * 0.15;
+            stabWrapper.style.transform = `translate3d(${-currentX}px, ${-currentY}px, 0) scale(1.05)`;
         } else {
             stabWrapper.style.transform = `none`;
         }
         requestAnimationFrame(applyStabilizer);
     }
 
-    // --- Render Viewfinder Loop (Hardware Accelerated 0.5x) ---
+    // --- Render Viewfinder Loop (Super HDR & Ultra 0.5x) ---
     function renderViewfinder() {
         if (videoEl.readyState === videoEl.HAVE_ENOUGH_DATA) {
             const [rw, rh] = config.ratio.split(':').map(Number);
             const targetRatio = rw / rh;
 
-            let renderWidth = videoEl.videoWidth || 640;
+            let renderWidth = videoEl.videoWidth || 1280;
             let renderHeight = renderWidth / targetRatio;
 
-            if (renderHeight > (videoEl.videoHeight || 480)) {
-                renderHeight = videoEl.videoHeight || 480;
+            if (renderHeight > (videoEl.videoHeight || 720)) {
+                renderHeight = videoEl.videoHeight || 720;
                 renderWidth = renderHeight * targetRatio;
             }
 
@@ -695,7 +704,14 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.save();
 
-            // Unflip Kamera Depan Selfie (Arah Nyata)
+            // Efek Super HDR Ultra Filters
+            if (config.isHDR) {
+                ctx.filter = 'contrast(112%) saturate(120%) brightness(103%)';
+            } else {
+                ctx.filter = 'none';
+            }
+
+            // Unflip Kamera Depan Selfie
             if (config.facingMode === 'user') {
                 ctx.translate(canvas.width, 0);
                 ctx.scale(-1, 1);
@@ -713,7 +729,7 @@
         requestAnimationFrame(renderViewfinder);
     }
 
-    // Torch Senter Handler
+    // Torch Control
     async function updateTorchState() {
         if (trackTorch) {
             try {
@@ -728,12 +744,17 @@
     const modePhotoBtn = document.getElementById('modePhoto');
     const modeVideoBtn = document.getElementById('modeVideo');
     const shutterBtn = document.getElementById('shutterBtn');
+    const ratioToggleBtn = document.getElementById('ratioToggle');
+    const resToggleBtn = document.getElementById('resToggle');
 
     modePhotoBtn.addEventListener('click', () => {
         config.mode = 'photo';
         modePhotoBtn.classList.add('active');
         modeVideoBtn.classList.remove('active');
         shutterBtn.classList.remove('video-mode');
+        ratioToggleBtn.style.display = 'flex';
+        resToggleBtn.style.display = 'none';
+        startCamera(false); // Matikan Mic
     });
 
     modeVideoBtn.addEventListener('click', () => {
@@ -741,12 +762,13 @@
         modeVideoBtn.classList.add('active');
         modePhotoBtn.classList.remove('active');
         shutterBtn.classList.add('video-mode');
+        ratioToggleBtn.style.display = 'none';
+        resToggleBtn.style.display = 'flex';
     });
 
-    // --- Shutter Handler (Ambil Foto / Rekam Video) ---
+    // --- Shutter Button Action ---
     shutterBtn.addEventListener('click', async () => {
         if (config.mode === 'photo') {
-            // AMBIL FOTO
             if (config.isFlash) {
                 const flash = document.getElementById('shutterFlash');
                 flash.classList.add('animate');
@@ -769,9 +791,9 @@
             });
 
         } else if (config.mode === 'video') {
-            // REKAM VIDEO
             if (!config.isRecording) {
-                startVideoRecording();
+                await startCamera(true); // Aktifkan Mic saat merekam
+                setTimeout(() => startVideoRecording(), 300);
             } else {
                 stopVideoRecording();
             }
@@ -784,7 +806,6 @@
         recordedChunks = [];
 
         const stream = canvas.captureStream(30);
-        // Tambahkan track audio jika ada
         if (currentStream && currentStream.getAudioTracks().length > 0) {
             stream.addTrack(currentStream.getAudioTracks()[0]);
         }
@@ -805,11 +826,12 @@
                 imageUrl: thumbUrl,
                 thumbUrl: thumbUrl
             });
+
+            startCamera(false); // Matikan Mic kembali setelah selesai merekam
         };
 
         mediaRecorder.start();
 
-        // Timer Rec UI
         recSeconds = 0;
         const timerEl = document.getElementById('recTimer');
         timerEl.classList.add('show');
@@ -832,22 +854,46 @@
         document.getElementById('recTimer').classList.remove('show');
     }
 
-    // --- UI Listeners & Controls ---
-    const ratioToggleBtn = document.getElementById('ratioToggle');
+    // --- UI Controls & Drawers ---
     const ratioDrawer = document.getElementById('ratioDrawer');
+    const resDrawer = document.getElementById('resDrawer');
 
     ratioToggleBtn.addEventListener('click', () => {
+        resDrawer.classList.remove('show');
         ratioDrawer.classList.toggle('show');
     });
 
-    document.querySelectorAll('.ratio-option').forEach(btn => {
+    resToggleBtn.addEventListener('click', () => {
+        ratioDrawer.classList.remove('show');
+        resDrawer.classList.toggle('show');
+    });
+
+    document.querySelectorAll('#ratioDrawer .drawer-option').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            document.querySelectorAll('.ratio-option').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('#ratioDrawer .drawer-option').forEach(b => b.classList.remove('active'));
             e.target.classList.add('active');
             config.ratio = e.target.getAttribute('data-ratio');
             ratioToggleBtn.innerText = config.ratio;
             ratioDrawer.classList.remove('show');
         });
+    });
+
+    document.querySelectorAll('#resDrawer .drawer-option').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('#resDrawer .drawer-option').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            config.videoRes = e.target.getAttribute('data-res');
+            resToggleBtn.innerText = config.videoRes === '2160' ? '4K' : config.videoRes + 'p';
+            resDrawer.classList.remove('show');
+            startCamera(config.isRecording);
+        });
+    });
+
+    // Super HDR Toggle
+    const hdrToggleBtn = document.getElementById('hdrToggle');
+    hdrToggleBtn.addEventListener('click', () => {
+        config.isHDR = !config.isHDR;
+        hdrToggleBtn.classList.toggle('active', config.isHDR);
     });
 
     // 0.5x Ultrawide GPU Switch
@@ -868,7 +914,7 @@
     // Switch Camera
     document.getElementById('switchCamera').addEventListener('click', () => {
         config.facingMode = (config.facingMode === 'user') ? 'environment' : 'user';
-        startCamera();
+        startCamera(false);
     });
 
     // Live Photo Toggle
@@ -928,7 +974,7 @@
         }
     }
 
-    // Press and Hold to Play Live Photo Clip
+    // Press and Hold to Play Live Photo
     function startLivePlayback() {
         const current = currentMediaList[activeMediaIndex];
         if (current && current.isLive && current.videoUrl) {
@@ -952,7 +998,7 @@
     galleryContainer.addEventListener('mousedown', startLivePlayback);
     galleryContainer.addEventListener('mouseup', stopLivePlayback);
 
-    // Save/Download Media to Local HP Memory
+    // Save/Download Media to Local Memory
     document.getElementById('downloadBtn').addEventListener('click', () => {
         if (!currentMediaList.length) return;
         const current = currentMediaList[activeMediaIndex];
@@ -982,7 +1028,7 @@
 
     // Initialize Application
     initDatabase();
-    startCamera();
+    startCamera(false);
     requestAnimationFrame(renderViewfinder);
     requestAnimationFrame(applyStabilizer);
 </script>
