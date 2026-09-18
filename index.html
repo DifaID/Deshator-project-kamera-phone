@@ -37,7 +37,7 @@
             overflow: hidden;
         }
 
-        /* Top Bar Navigation */
+        /* Top Navigation Bar */
         .top-bar {
             position: absolute;
             top: 0;
@@ -90,15 +90,37 @@
             justify-content: center;
             align-items: center;
             background: #000;
+            overflow: hidden;
         }
 
+        /* Stabilizer Wrapper */
+        .stabilizer-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.05s ease-out;
+            will-change: transform;
+        }
+
+        /* Fast Lens Transform for Ultrawide 0.5x */
         canvas#viewfinder {
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
+            transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+            will-change: transform;
         }
 
-        /* Flash Screen Anim */
+        canvas#viewfinder.ultrawide {
+            transform: scale(0.78) perspective(500px) rotateX(1deg);
+            border-radius: 24px;
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.8);
+        }
+
+        /* Flash Animation Screen */
         .shutter-flash {
             position: absolute;
             top: 0;
@@ -120,7 +142,7 @@
             100% { opacity: 0; }
         }
 
-        /* Ratio Drawer */
+        /* Ratio Drawer Options */
         .ratio-drawer {
             position: absolute;
             top: 65px;
@@ -179,7 +201,7 @@
             display: block;
         }
 
-        /* Bottom Controls */
+        /* Bottom Control Panel */
         .bottom-bar {
             position: absolute;
             bottom: 0;
@@ -193,7 +215,7 @@
             z-index: 10;
         }
 
-        /* Zoom Buttons */
+        /* Zoom Switcher */
         .zoom-container {
             display: flex;
             gap: 15px;
@@ -241,6 +263,7 @@
             overflow: hidden;
             border: 2px solid rgba(255,255,255,0.5);
             cursor: pointer;
+            position: relative;
         }
 
         .gallery-preview img {
@@ -274,7 +297,7 @@
             transform: scale(0.85);
         }
 
-        /* Preview Modal */
+        /* Gallery Modal Overlay */
         .gallery-modal {
             position: absolute;
             top: 0;
@@ -292,7 +315,7 @@
         }
 
         .gallery-header {
-            height: 50px;
+            height: 55px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -306,12 +329,35 @@
             justify-content: center;
             align-items: center;
             position: relative;
+            background: #000;
+            overflow: hidden;
         }
 
-        .gallery-content img {
+        .gallery-content img, .gallery-content video {
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
+        }
+
+        .gallery-footer {
+            height: 65px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            background: #111;
+            padding: 0 20px;
+        }
+
+        .live-hint {
+            position: absolute;
+            top: 15px;
+            background: rgba(0,0,0,0.6);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            color: #f5c518;
+            font-weight: 600;
+            pointer-events: none;
         }
     </style>
 </head>
@@ -323,10 +369,10 @@
         <button class="icon-btn" id="flashToggle">⚡</button>
         <button class="icon-btn" id="liveToggle">LIVE</button>
         <button class="icon-btn ratio-btn" id="ratioToggle">3:4</button>
-        <button class="icon-btn" id="timerToggle">⏱️</button>
+        <button class="icon-btn" id="stabToggle" title="Stabilizer">🌐</button>
     </div>
 
-    <!-- Ratio Selection Drawer -->
+    <!-- Ratio Options Drawer -->
     <div class="ratio-drawer" id="ratioDrawer">
         <button class="ratio-option" data-ratio="1:1">1:1</button>
         <button class="ratio-option active" data-ratio="3:4">3:4</button>
@@ -337,12 +383,14 @@
         <button class="ratio-option" data-ratio="16:9">16:9</button>
     </div>
 
-    <!-- Live Badge -->
+    <!-- Live Photo Active Tag -->
     <div class="live-tag" id="liveTag">LIVE</div>
 
     <!-- Viewfinder Area -->
     <div class="viewfinder-container">
-        <canvas id="viewfinder"></canvas>
+        <div class="stabilizer-wrapper" id="stabWrapper">
+            <canvas id="viewfinder"></canvas>
+        </div>
         <div class="shutter-flash" id="shutterFlash"></div>
     </div>
 
@@ -369,15 +417,21 @@
         </div>
     </div>
 
-    <!-- Preview Modal -->
+    <!-- Persistent Gallery Modal -->
     <div class="gallery-modal" id="galleryModal">
         <div class="gallery-header">
             <button class="icon-btn" id="closeGallery">✕</button>
-            <span style="font-size: 14px; font-weight: 600;">Media Preview</span>
+            <span style="font-size: 14px; font-weight: 600;">Galeri iOS</span>
             <div style="width: 40px;"></div>
         </div>
-        <div class="gallery-content">
+        <div class="gallery-content" id="galleryContainer">
+            <div class="live-hint" id="liveHint" style="display:none;">Tahan foto untuk memutar Live Photo</div>
             <img id="galleryImg" src="" alt="">
+            <video id="galleryVideo" loop playsinline style="display:none;"></video>
+        </div>
+        <div class="gallery-footer">
+            <button class="icon-btn" id="downloadBtn" title="Simpan ke HP">📥</button>
+            <button class="icon-btn" id="deleteBtn" title="Hapus Photo">🗑️</button>
         </div>
     </div>
 </div>
@@ -386,22 +440,85 @@
 
 <script>
     const config = {
-        facingMode: 'user', // Selfie default
+        facingMode: 'user',
         zoom: 1,
-        ratio: '3:4', // Default rasio 3:4 foto formal
+        ratio: '3:4',
         isLive: false,
         isFlash: false,
-        lastCapturedMedia: null
+        isStab: true
     };
 
     const videoEl = document.getElementById('webcamVideo');
     const canvas = document.getElementById('viewfinder');
     const ctx = canvas.getContext('2d');
-    
+    const stabWrapper = document.getElementById('stabWrapper');
+
     let currentStream = null;
     let trackTorch = null;
+    let mediaRecorder = null;
+    let liveChunks = [];
+    let db = null;
+    let currentMediaList = [];
+    let activeMediaIndex = 0;
 
-    // Start Camera Stream
+    // --- IndexedDB: Permanently Save Media to Local Device ---
+    function initDatabase() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open('iOSCameraDB', 1);
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('media')) {
+                    db.createObjectStore('media', { keyPath: 'id', autoIncrement: true });
+                }
+            };
+            request.onsuccess = (e) => {
+                db = e.target.result;
+                loadGalleryItems();
+                resolve();
+            };
+            request.onerror = (e) => reject(e);
+        });
+    }
+
+    async function saveMediaToDB(mediaObj) {
+        if (!db) return;
+        const tx = db.transaction('media', 'readwrite');
+        const store = tx.objectStore('media');
+        store.add({ ...mediaObj, timestamp: Date.now() });
+        tx.oncomplete = () => loadGalleryItems();
+    }
+
+    async function loadGalleryItems() {
+        if (!db) return;
+        const tx = db.transaction('media', 'readonly');
+        const store = tx.objectStore('media');
+        const request = store.getAll();
+        request.onsuccess = () => {
+            currentMediaList = request.result.reverse();
+            if (currentMediaList.length > 0) {
+                const latest = currentMediaList[0];
+                const thumb = document.getElementById('thumbImg');
+                thumb.src = latest.imageUrl;
+                thumb.style.display = 'block';
+            } else {
+                document.getElementById('thumbImg').style.display = 'none';
+            }
+        };
+    }
+
+    async function deleteCurrentMedia() {
+        if (!currentMediaList.length || !db) return;
+        const currentItem = currentMediaList[activeMediaIndex];
+        const tx = db.transaction('media', 'readwrite');
+        const store = tx.objectStore('media');
+        store.delete(currentItem.id);
+        tx.oncomplete = () => {
+            loadGalleryItems();
+            document.getElementById('galleryModal').classList.remove('show');
+        };
+    }
+
+    // --- Start Camera & Stream Processing ---
     async function startCamera() {
         if (currentStream) {
             currentStream.getTracks().forEach(track => track.stop());
@@ -416,68 +533,67 @@
                 },
                 audio: false
             };
-            
+
             currentStream = await navigator.mediaDevices.getUserMedia(constraints);
             videoEl.srcObject = currentStream;
             await videoEl.play();
 
-            // Hardware Torch Senter
+            // Hardware Flash Torch Check
             const videoTrack = currentStream.getVideoTracks()[0];
             const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
-            if (capabilities.torch) {
-                trackTorch = videoTrack;
-            } else {
-                trackTorch = null;
-            }
+            trackTorch = capabilities.torch ? videoTrack : null;
             updateTorchState();
+
+            startLivePhotoBuffer();
         } catch (err) {
-            console.warn("Akses kamera terhalang:", err);
+            console.warn("Camera stream error:", err);
         }
     }
 
-    // Toggle Senter Flash
-    async function updateTorchState() {
-        if (trackTorch) {
-            try {
-                await trackTorch.applyConstraints({
-                    advanced: [{ torch: config.isFlash && config.facingMode === 'environment' }]
-                });
-            } catch (e) {
-                console.log("Torch error:", e);
-            }
+    // Continuous Recording Buffer for Live Photo
+    function startLivePhotoBuffer() {
+        if (!currentStream) return;
+        try {
+            const canvasStream = canvas.captureStream(30);
+            mediaRecorder = new MediaRecorder(canvasStream);
+            liveChunks = [];
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) {
+                    liveChunks.push(e.data);
+                    if (liveChunks.length > 10) liveChunks.shift(); // Keep last ~3 seconds
+                }
+            };
+            mediaRecorder.start(300);
+        } catch (e) {
+            console.log("Recorder initialization bypassed");
         }
     }
 
-    // High-Performance Hardware-Accelerated Fisheye Ultrawide (0.5x) Render
-    function drawUltrawideHardware(source, sx, sy, sw, sh, cw, ch) {
-        ctx.save();
-        
-        // Posisikan pivot di tengah kanvas
-        ctx.translate(cw / 2, ch / 2);
+    // --- Gyroscope Real-Time Video Motion Stabilizer ---
+    let targetX = 0, targetY = 0;
+    let currentX = 0, currentY = 0;
 
-        // Efek Skala Zoom Out Tengah (Perspektif Jauh)
-        const scaleFactor = 0.72;
-        ctx.scale(scaleFactor, scaleFactor);
-
-        // Clip bentuk Cembung Lensa Ultrawide (Barrel Curve)
-        ctx.beginPath();
-        const w = cw;
-        const h = ch;
-        
-        ctx.moveTo(-w / 2, -h / 2);
-        ctx.quadraticCurveTo(0, -h / 2 - 25, w / 2, -h / 2);
-        ctx.quadraticCurveTo(w / 2 + 25, 0, w / 2, h / 2);
-        ctx.quadraticCurveTo(0, h / 2 + 25, -w / 2, h / 2);
-        ctx.quadraticCurveTo(-w / 2 - 25, 0, -w / 2, -h / 2);
-        ctx.closePath();
-        ctx.clip();
-
-        // Render Frame
-        ctx.drawImage(source, sx, sy, sw, sh, -w / 2, -h / 2, w, h);
-        ctx.restore();
+    if (window.DeviceOrientationEvent) {
+        window.addEventListener('deviceorientation', (e) => {
+            if (!config.isStab) return;
+            targetX = (e.gamma || 0) * 0.25; // Roll compensation
+            targetY = (e.beta || 0) * 0.25;  // Pitch compensation
+        });
     }
 
-    // Render Loop Viewfinder
+    function applyStabilizer() {
+        if (config.isStab) {
+            currentX += (targetX - currentX) * 0.1;
+            currentY += (targetY - currentY) * 0.1;
+            stabWrapper.style.transform = `translate3d(${-currentX}px, ${-currentY}px, 0) scale(1.05)`;
+        } else {
+            stabWrapper.style.transform = `none`;
+        }
+        requestAnimationFrame(applyStabilizer);
+    }
+
+    // --- High Performance Hardware Acceleration Render Loop ---
     function renderViewfinder() {
         if (videoEl.readyState === videoEl.HAVE_ENOUGH_DATA) {
             const [rw, rh] = config.ratio.split(':').map(Number);
@@ -500,32 +616,37 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.save();
 
-            // Kamera Selfie Depan TIDAK Mirror (Arah Nyata)
+            // Selfie Camera Correct Orientation
             if (config.facingMode === 'user') {
                 ctx.translate(canvas.width, 0);
                 ctx.scale(-1, 1);
             }
 
-            if (config.zoom === 0.5) {
-                // Mode 0.5x Ultrawide Cepat & Lancar via GPU Canvas
-                drawUltrawideHardware(videoEl, sx, sy, renderWidth, renderHeight, canvas.width, canvas.height);
-            } else {
-                // Kamera Normal 1x & Zoom 2x
-                const zoomFactor = config.zoom;
-                const zw = renderWidth / zoomFactor;
-                const zh = renderHeight / zoomFactor;
-                const zx = sx + (renderWidth - zw) / 2;
-                const zy = sy + (renderHeight - zh) / 2;
+            // Zoom 1x & 2x
+            const zoomFactor = (config.zoom === 0.5) ? 1 : config.zoom;
+            const zw = renderWidth / zoomFactor;
+            const zh = renderHeight / zoomFactor;
+            const zx = sx + (renderWidth - zw) / 2;
+            const zy = sy + (renderHeight - zh) / 2;
 
-                ctx.drawImage(videoEl, zx, zy, zw, zh, 0, 0, canvas.width, canvas.height);
-            }
-
+            ctx.drawImage(videoEl, zx, zy, zw, zh, 0, 0, canvas.width, canvas.height);
             ctx.restore();
         }
         requestAnimationFrame(renderViewfinder);
     }
 
-    // Shutter Photo
+    // --- Flash Control ---
+    async function updateTorchState() {
+        if (trackTorch) {
+            try {
+                await trackTorch.applyConstraints({
+                    advanced: [{ torch: config.isFlash && config.facingMode === 'environment' }]
+                });
+            } catch (e) {}
+        }
+    }
+
+    // --- Capture Photo & Live Photo ---
     document.getElementById('shutterBtn').addEventListener('click', async () => {
         if (config.isFlash) {
             const flash = document.getElementById('shutterFlash');
@@ -534,14 +655,23 @@
         }
 
         const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
-        config.lastCapturedMedia = { type: 'image', url: dataUrl };
+        let videoBlobUrl = null;
 
-        const thumb = document.getElementById('thumbImg');
-        thumb.src = dataUrl;
-        thumb.style.display = 'block';
+        if (config.isLive && liveChunks.length > 0) {
+            const liveBlob = new Blob(liveChunks, { type: 'video/mp4' });
+            videoBlobUrl = URL.createObjectURL(liveBlob);
+        }
+
+        const mediaItem = {
+            imageUrl: dataUrl,
+            videoUrl: videoBlobUrl,
+            isLive: config.isLive && !!videoBlobUrl
+        };
+
+        await saveMediaToDB(mediaItem);
     });
 
-    // Ratio Switch
+    // --- UI Controls Event Listeners ---
     const ratioToggleBtn = document.getElementById('ratioToggle');
     const ratioDrawer = document.getElementById('ratioDrawer');
 
@@ -553,29 +683,34 @@
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.ratio-option').forEach(b => b.classList.remove('active'));
             e.target.classList.add('active');
-            
             config.ratio = e.target.getAttribute('data-ratio');
             ratioToggleBtn.innerText = config.ratio;
             ratioDrawer.classList.remove('show');
         });
     });
 
-    // Zoom Switch
+    // GPU Lens Transformer for 0.5x
     document.querySelectorAll('.zoom-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.zoom-btn').forEach(b => b.classList.remove('active'));
             e.target.classList.add('active');
             config.zoom = parseFloat(e.target.getAttribute('data-zoom'));
+
+            if (config.zoom === 0.5) {
+                canvas.classList.add('ultrawide');
+            } else {
+                canvas.classList.remove('ultrawide');
+            }
         });
     });
 
-    // Switch Front/Rear
+    // Camera Switcher
     document.getElementById('switchCamera').addEventListener('click', () => {
         config.facingMode = (config.facingMode === 'user') ? 'environment' : 'user';
         startCamera();
     });
 
-    // Live Toggle
+    // Live Mode Toggle
     const liveToggleBtn = document.getElementById('liveToggle');
     const liveTag = document.getElementById('liveTag');
     liveToggleBtn.addEventListener('click', () => {
@@ -592,22 +727,85 @@
         updateTorchState();
     });
 
-    // Gallery Modal Preview
+    // Stabilizer Toggle
+    const stabToggleBtn = document.getElementById('stabToggle');
+    stabToggleBtn.addEventListener('click', () => {
+        config.isStab = !config.isStab;
+        stabToggleBtn.classList.toggle('active', config.isStab);
+    });
+
+    // --- Gallery Preview & Touch Interactivity ---
+    const galleryContainer = document.getElementById('galleryContainer');
+    const galleryImg = document.getElementById('galleryImg');
+    const galleryVideo = document.getElementById('galleryVideo');
+    const liveHint = document.getElementById('liveHint');
+
     document.getElementById('galleryPreview').addEventListener('click', () => {
-        if (!config.lastCapturedMedia) return;
-        const modal = document.getElementById('galleryModal');
-        const img = document.getElementById('galleryImg');
-        img.src = config.lastCapturedMedia.url;
-        modal.classList.add('show');
+        if (!currentMediaList.length) return;
+        activeMediaIndex = 0;
+        const current = currentMediaList[activeMediaIndex];
+
+        galleryImg.src = current.imageUrl;
+        galleryImg.style.display = 'block';
+        galleryVideo.style.display = 'none';
+
+        if (current.isLive && current.videoUrl) {
+            galleryVideo.src = current.videoUrl;
+            liveHint.style.display = 'block';
+        } else {
+            liveHint.style.display = 'none';
+        }
+
+        document.getElementById('galleryModal').classList.add('show');
+    });
+
+    // Press and Hold to Play Live Photo Clip
+    function startLivePlayback() {
+        const current = currentMediaList[activeMediaIndex];
+        if (current && current.isLive && current.videoUrl) {
+            galleryImg.style.display = 'none';
+            galleryVideo.style.display = 'block';
+            galleryVideo.play();
+        }
+    }
+
+    function stopLivePlayback() {
+        galleryVideo.pause();
+        galleryVideo.style.display = 'none';
+        galleryImg.style.display = 'block';
+    }
+
+    galleryContainer.addEventListener('touchstart', startLivePlayback);
+    galleryContainer.addEventListener('touchend', stopLivePlayback);
+    galleryContainer.addEventListener('mousedown', startLivePlayback);
+    galleryContainer.addEventListener('mouseup', stopLivePlayback);
+
+    // Save/Download Media to Local Device Gallery
+    document.getElementById('downloadBtn').addEventListener('click', () => {
+        if (!currentMediaList.length) return;
+        const current = currentMediaList[activeMediaIndex];
+        const a = document.createElement('a');
+        a.href = current.imageUrl;
+        a.download = `photo_${Date.now()}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    });
+
+    // Delete Media Item
+    document.getElementById('deleteBtn').addEventListener('click', () => {
+        deleteCurrentMedia();
     });
 
     document.getElementById('closeGallery').addEventListener('click', () => {
         document.getElementById('galleryModal').classList.remove('show');
     });
 
-    // Start App
+    // --- App Initialization ---
+    initDatabase();
     startCamera();
     requestAnimationFrame(renderViewfinder);
+    requestAnimationFrame(applyStabilizer);
 </script>
 </body>
 </html>
